@@ -1,13 +1,6 @@
-include variables.mk
-include functions.mk
-
-#
-# Responsible for creating ecapture snapshots for testing and releasing
-#
-
 .PHONY: all
 all: help
-release: snapshot build_deb snapshot_android
+release: release_windows
 
 #
 # make
@@ -141,14 +134,13 @@ release_windows: \
 
 .PHONY: publish
 publish: \
+	release_windows \
 	$(OUTPUT_DIR) \
-	$(OUT_ARCHIVE) \
-	$(OUT_DEB_FILE) \
 	| .check_tree \
 	.check_$(CMD_GITHUB)
 	@$(CMD_CD) $(OUTPUT_DIR)
-	@$(CMD_CHECKSUM) ecapture*v* | $(CMD_SED) 's/.\/bin\///g' > $(OUT_CHECKSUMS)
-	@FILES=$$(ls ecapture-*.tar.gz ecapture*.deb ecapture-*.zip checksum-*.txt 2>/dev/null)
+	@$(CMD_CHECKSUM) ecapture-*.zip | $(CMD_SED) 's/.\/bin\///g' > $(OUT_CHECKSUMS)
+	@FILES=$$(ls ecapture-*.zip checksum-*.txt 2>/dev/null)
 	@if [ "$(IS_PRERELEASE)" = "true" ]; then \
 		echo "🚧 Publishing as pre-release: $(DEB_VERSION)"; \
 		$(CMD_GITHUB) release create $(DEB_VERSION) $$FILES --title "eCapture $(DEB_VERSION)" --notes-file $(RELEASE_NOTES) --prerelease; \
