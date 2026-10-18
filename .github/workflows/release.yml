@@ -8,12 +8,18 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: ubuntu-24.04
     name: release Windows Version (amd64/arm64)
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-go@v5
         with:
@@ -22,7 +28,7 @@ jobs:
       - name: Check Release Type
         id: release_type
         run: |
-          TAG_NAME=${{ github.ref_name }}
+          TAG_NAME="$GITHUB_REF_NAME"
           if [[ "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "IS_PRERELEASE=false" >> $GITHUB_OUTPUT
             echo "RELEASE_TYPE=stable" >> $GITHUB_OUTPUT
@@ -43,44 +49,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes gcc-mingw-w64-x86-64 mingw-w64-x86-64-dev
 
-      - name: Authenticate gh
-        run: |
-          gh auth login --with-token <<<'${{ secrets.GITHUB_TOKEN }}'
-
       - name: Get Previous Tag
         id: previoustag
         run: |
           PREVIOUS=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          echo "PREVIOUS_TAG=$PREVIOUS" >> $GITHUB_OUTPUT
+          echo "PREVIOUS_TAG=$PREVIOUS" >> "$GITHUB_OUTPUT"
 
       - name: Generate Release Notes
-        id: release_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_TAG: ${{ steps.previoustag.outputs.PREVIOUS_TAG }}
         run: |
-          gh api \
-            --method POST \
+          args=(-f "tag_name=${GITHUB_REF_NAME}")
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            args+=(-f "previous_tag_name=${PREVIOUS_TAG}")
+          fi
+          mkdir -p bin
+          gh api --method POST \
             -H "Accept: application/vnd.github+json" \
-            /repos/${{ github.repository }}/releases/generate-notes \
-            -f tag_name=${{ github.ref_name }} \
-            -f previous_tag_name=${{ steps.previoustag.outputs.PREVIOUS_TAG }} \
-            > release_notes.json
-          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
-          jq -r .body release_notes.json >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Write Release Notes File
-        uses: DamianReeves/write-file-action@v1.2
-        with:
-          path: ./bin/release_notes.txt
-          contents: |
-            ${{ steps.release_notes.outputs.NOTES }}
-          write-mode: append
+            "/repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            "${args[@]}" | jq -er .body > bin/release_notes.txt
+          test -s bin/release_notes.txt
 
       - name: Release Windows (amd64/arm64)
+        env:
+          SNAPSHOT_VERSION: ${{ github.ref_name }}
         run: |
-          make -f builder/Makefile.release release_windows SNAPSHOT_VERSION=${{ github.ref_name }}
+          make -f builder/Makefile.release release_windows "SNAPSHOT_VERSION=$SNAPSHOT_VERSION"
 
       - name: Publish
         env:
+          GH_TOKEN: ${{ github.token }}
           IS_PRERELEASE: ${{ steps.release_type.outputs.IS_PRERELEASE }}
+          SNAPSHOT_VERSION: ${{ github.ref_name }}
         run: |
-          make -f builder/Makefile.release publish SNAPSHOT_VERSION=${{ github.ref_name }}
+          make -f builder/Makefile.release publish "SNAPSHOT_VERSION=$SNAPSHOT_VERSION"

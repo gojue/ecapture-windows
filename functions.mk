@@ -82,7 +82,6 @@ define build_schannel_hook_dll
 	$(CMD_MKDIR) -p bin
 	@if [ "$(MINGW_TARGET)" = "aarch64-w64-windows-gnu" ]; then \
 		echo "Skipping bin/schannel_hook.dll (ARM64 — no inline hook needed; see schannel_hook.c:29)"; \
-		touch bin/schannel_hook.dll; \
 	elif command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then \
 		echo "Building bin/schannel_hook.dll ($(MINGW_TARGET)) with x86_64-w64-mingw32-gcc"; \
 		x86_64-w64-mingw32-gcc -shared -O2 -DSECURITY_WIN32 \
@@ -129,6 +128,7 @@ endef
 
 # build and zip for Windows (no eBPF, CGO_ENABLED=0)
 define release_zip
+	set -e
 	$(call allow-override,TAR_DIR,ecapture-$(DEB_VERSION)-$(1)-$(2))
 	$(call allow-override,OUT_ZIP,$(OUTPUT_DIR)/$(TAR_DIR).zip)
 	$(CMD_MAKE) clean
@@ -137,8 +137,12 @@ define release_zip
 	$(CMD_CP) LICENSE $(TAR_DIR)/LICENSE
 	$(CMD_CP) README.md $(TAR_DIR)/README.md
 	$(CMD_CP) README-zh_Hans.md $(TAR_DIR)/README-zh_Hans.md
+	test -s $(OUTPUT_DIR)/ecapture.exe
 	$(CMD_CP) $(OUTPUT_DIR)/ecapture.exe $(TAR_DIR)/ecapture.exe
-	@if [ -f bin/schannel_hook.dll ]; then $(CMD_CP) bin/schannel_hook.dll $(TAR_DIR)/schannel_hook.dll; fi
+	@if [ "$(2)" = "amd64" ]; then \
+		test -s bin/schannel_hook.dll; \
+		$(CMD_CP) bin/schannel_hook.dll $(TAR_DIR)/schannel_hook.dll; \
+	fi
 	$(CMD_RM) -f $(OUT_ZIP)
 	(cd $(TAR_DIR) && $(CMD_ZIP) -r ../$(OUT_ZIP) .)
 endef
