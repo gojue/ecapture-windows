@@ -7,7 +7,7 @@ include functions.mk
 
 .PHONY: all
 all: help
-release: snapshot build_deb snapshot_android
+release: release_windows
 
 #
 # make
