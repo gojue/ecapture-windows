@@ -223,9 +223,10 @@ build_noncore: \
 #   - Set NPCAP_SDK to the SDK root (e.g. /opt/npcap-sdk)
 #   - MinGW headers/libs: apt-get install mingw-w64-x86-64-dev
 # If NPCAP_SDK is not set, builds without pcap (ETW-only).
-# Always builds bin/schannel_hook.dll alongside bin/ecapture.exe.
+# Build the Schannel hook DLL for amd64; arm64 only needs ecapture.exe.
 .PHONY: windows bin/schannel_hook.dll
 windows: .checkver_$(CMD_GO)
+	@set -e
 	$(call gobuild_windows)
 	$(call build_schannel_hook_dll)
 
